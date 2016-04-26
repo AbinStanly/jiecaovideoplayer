@@ -44,11 +44,14 @@ public class JCVideoPlayer extends FrameLayout implements View.OnClickListener, 
     RelativeLayout rlParent;
     LinearLayout llTitleContainer, llBottomControl;
     ImageView ivCover;
+    private JCVideoPLayerListener listener;
 
     private String url;
     private String title;
     private boolean ifFullScreen = false;
     private boolean ifShowTitle = false;
+    private boolean ifAutoPlay = false;
+    private boolean ifShowSeekBar = true;
     private boolean ifMp3 = false;
 
     private int enlargRecId = 0;
@@ -121,7 +124,7 @@ public class JCVideoPlayer extends FrameLayout implements View.OnClickListener, 
      * @param title 标题 | title
      */
     public void setUp(String url, String title) {
-        setUp(url, title, true);
+        setUp(url, title, true, false);
     }
 
     /**
@@ -132,12 +135,12 @@ public class JCVideoPlayer extends FrameLayout implements View.OnClickListener, 
      * @param title       标题 | title
      * @param ifShowTitle 是否在非全屏下显示标题 | The title is displayed in full-screen under
      */
-    public void setUp(String url, String title, boolean ifShowTitle) {
+    public void setUp(String url, String title, boolean ifShowTitle, boolean ifFullScreen) {
         this.ifShowTitle = ifShowTitle;
         if ((System.currentTimeMillis() - clickfullscreentime) < FULL_SCREEN_NORMAL_DELAY) return;
         this.url = url;
         this.title = title;
-        this.ifFullScreen = false;
+        this.ifFullScreen = ifFullScreen;
         CURRENT_STATE = CURRENT_STATE_NORMAL;
         if (ifFullScreen) {
             ivFullScreen.setImageResource(enlargRecId == 0 ? R.drawable.shrink_video : enlargRecId);
@@ -155,6 +158,10 @@ public class JCVideoPlayer extends FrameLayout implements View.OnClickListener, 
 
         if (JCMediaManager.intance().listener == this) {
             JCMediaManager.intance().mediaPlayer.stop();
+        }
+
+        if(!ifShowSeekBar) {
+            skProgress.setVisibility(INVISIBLE);
         }
 
     }
@@ -211,6 +218,14 @@ public class JCVideoPlayer extends FrameLayout implements View.OnClickListener, 
         }
     }
 
+    public void setAutoPlay(boolean ifAutoPlay) {
+        this.ifAutoPlay = ifAutoPlay;
+    }
+
+    public void setShowSeekBar(boolean ifShowSeekBar) {
+        this.ifShowSeekBar = ifShowSeekBar;
+    }
+
     /**
      * 目前认为详细的判断和重复的设置是有相当必要的,也可以包装成方法
      */
@@ -219,7 +234,7 @@ public class JCVideoPlayer extends FrameLayout implements View.OnClickListener, 
         int i = v.getId();
         if (i == R.id.start || i == R.id.thumb) {
             if (TextUtils.isEmpty(url)) {
-                Toast.makeText(getContext(), "视频地址为空", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "no video configured", Toast.LENGTH_SHORT).show();
                 return;
             }
             if (i == R.id.thumb) {
@@ -249,6 +264,14 @@ public class JCVideoPlayer extends FrameLayout implements View.OnClickListener, 
                 Log.i("JCVideoPlayer", "play video");
 
                 surfaceView.requestLayout();
+                surfaceView.setOnTouchListener(new OnTouchListener() {
+                    @Override
+                    public boolean onTouch(View v, MotionEvent event) {
+                        if(listener != null)
+                            listener.onTouchPlayer(v, event);
+                        return false;
+                    }
+                });
                 setKeepScreenOn(true);
 
                 if (JC_BURIED_POINT != null && JCMediaManager.intance().listener == this) {
@@ -573,6 +596,10 @@ public class JCVideoPlayer extends FrameLayout implements View.OnClickListener, 
         //回收surfaceview
     }
 
+    public void seekTo(int progress) {
+        onProgressChanged(skProgress, progress, true);
+    }
+
     @Override
     public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
         if (fromUser) {
@@ -581,6 +608,9 @@ public class JCVideoPlayer extends FrameLayout implements View.OnClickListener, 
             pbLoading.setVisibility(View.VISIBLE);
             ivStart.setVisibility(View.INVISIBLE);
         }
+
+        if(listener != null)
+            listener.onProgress(progress);
     }
 
     @Override
@@ -782,6 +812,9 @@ public class JCVideoPlayer extends FrameLayout implements View.OnClickListener, 
         JCMediaManager.intance().mediaPlayer.start();
         CURRENT_STATE = CURRENT_STATE_PLAYING;
 
+        if(listener != null)
+            listener.onPlay();
+
         changeUiToShowUiPlaying();
         ivStart.setVisibility(View.INVISIBLE);
 
@@ -791,6 +824,9 @@ public class JCVideoPlayer extends FrameLayout implements View.OnClickListener, 
 
     @Override
     public void onCompletion() {
+        if(listener != null)
+            listener.onCompletion();
+
         CURRENT_STATE = CURRENT_STATE_NORMAL;
         cancelProgressTimer();
         cancelDismissControlViewTimer();
@@ -852,5 +888,16 @@ public class JCVideoPlayer extends FrameLayout implements View.OnClickListener, 
 
     public static void setJcBuriedPoint(JCBuriedPoint jcBuriedPoint) {
         JC_BURIED_POINT = jcBuriedPoint;
+    }
+
+    public void setJCVideoPLayerListener(JCVideoPLayerListener listener) {
+        this.listener = listener;
+    }
+
+    public interface JCVideoPLayerListener {
+        void onCompletion();
+        void onPlay();
+        void onProgress(int progress);
+        void onTouchPlayer(View v, MotionEvent event);
     }
 }
